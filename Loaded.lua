@@ -1,20 +1,19 @@
 local a = game.ReplicatedStorage
 local b = "Check"
-
 a[b].OnClientInvoke = function()
     local c = 1 + 1
     local d = c - 1
     return d == 1
 end
 
-local function a(b)
-	local c = {}
-	local d = b.Parent
-	while d do
-		table.insert(c, d)
-		d = d.Parent
+local function getAncestors(instance)
+	local ancestors = {}
+	local parent = instance.Parent
+	while parent do
+		table.insert(ancestors, parent)
+		parent = parent.Parent
 	end
-	return c
+	return ancestors
 end
 
 local e = game:GetService("ReplicatedStorage")
@@ -63,7 +62,12 @@ local g = {
 	"Memory",
 	"Video",
 	"CursorImage",
-	"LanguageService"
+	"LanguageService",
+	"Animator", -- Common legitimate instance
+	"Humanoid", -- Common legitimate instance
+	"Motor6D", -- Common legitimate instance
+	"Weld", -- Common legitimate instance
+	"WeldConstraint", -- Common legitimate instance
 }
 
 local function h(i)
@@ -75,24 +79,39 @@ local function h(i)
 	return false
 end
 
-task.wait(1)
+-- Wait longer for game to fully load
+task.wait(3)
 
 game.DescendantAdded:Connect(function(k)
+	-- Skip whitelisted instances
 	if h(k.Name) then return end
-
-	local l = f:InvokeServer(k.Parent.Name, k.Name)
-
-	local m = a(k)
+	
+	-- Skip if parent doesn't exist (instance might be destroyed)
+	if not k.Parent then return end
+	
+	local success, l = pcall(function()
+		return f:InvokeServer(k.Parent.Name, k.Name)
+	end)
+	
+	-- If server call failed, skip this check
+	if not success then return end
+	
+	local m = getAncestors(k)
 	for _, n in ipairs(m) do
 		if n.Name == "ReplicatedStorage" then
 			e.AntiCheat:FireServer("???", "using exploit.")
 			return
 		end
 	end
-
+	
 	local o = k:FindFirstChild("Key")
-	local p = e.GetKey:InvokeServer()
-
+	local keySuccess, p = pcall(function()
+		return e.GetKey:InvokeServer()
+	end)
+	
+	-- If can't get key, skip check
+	if not keySuccess then return end
+	
 	if o and l then
 		if o.Value ~= p then
 			e.AntiCheat:FireServer(k.Name, "adding instance with wrong key - exploit.")
